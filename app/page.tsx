@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useMemo, useState } from "react";
 
@@ -12,6 +12,12 @@ type FormState = {
 type PredictionLevel = "冲刺" | "稳妥" | "保底";
 
 type ScoreSnapshot = {
+  highest?: number;
+  lowest?: number;
+  lowestRank?: number;
+};
+
+type CurrentScoreSnapshot = ScoreSnapshot & {
   highest: number;
   lowest: number;
 };
@@ -26,10 +32,12 @@ type PredictionResult = {
   plan2025: number;
   plan2026: number;
   planDelta: number;
+  score2022: ScoreSnapshot | null;
   score2023: ScoreSnapshot | null;
   score2024: ScoreSnapshot | null;
-  score2025: ScoreSnapshot;
+  score2025: CurrentScoreSnapshot;
   scoreGap: number;
+  rankGap2024: number | null;
   probability: number;
   level: PredictionLevel;
   reason: string;
@@ -107,9 +115,20 @@ function planText(item: PredictionResult) {
   return `2026 ${item.plan2026}人（持平）`;
 }
 
-function scoreText(score: ScoreSnapshot | null) {
-  if (!score) return "--";
+function scoreRangeText(score: ScoreSnapshot | null) {
+  if (typeof score?.lowest !== "number" || typeof score.highest !== "number") return "--";
   return `${score.lowest}/${score.highest}`;
+}
+
+function rankText(score: ScoreSnapshot | null) {
+  if (typeof score?.lowestRank !== "number") return "--";
+  return score.lowestRank.toLocaleString("zh-CN");
+}
+
+function rankCompareText(item: PredictionResult) {
+  if (item.rankGap2024 === null) return "2024位次暂缺";
+  if (item.rankGap2024 >= 0) return `较2024靠前 ${item.rankGap2024.toLocaleString("zh-CN")} 名`;
+  return `较2024靠后 ${Math.abs(item.rankGap2024).toLocaleString("zh-CN")} 名`;
 }
 
 export default function Home() {
@@ -187,13 +206,13 @@ export default function Home() {
 
           <div className="mt-auto pt-12">
             <div className="mb-4 inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs text-white/82">
-              按专业组、选科、2023-2025分数和2026计划变化测算
+              按2025去年普通分、2024位次和2026计划变化测算
             </div>
             <h1 className="max-w-2xl text-[2rem] font-semibold leading-tight tracking-normal">
               南京医科大学康达学院志愿智能助手
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/78">
-              当前版本已排除定向培养，按普通专业组计算。护理学必须匹配生物选科；物理+化学查询不会再显示护理学。
+              当前版本只使用普通非定向专业组。护理学按图片要求放在生物专业组；物理+化学不含生物时，不会显示护理学。
             </p>
           </div>
         </div>
@@ -225,9 +244,9 @@ export default function Home() {
                   className="h-12 w-full appearance-none rounded-md border border-[#d8e3ea] bg-white px-4 pr-11 text-base text-[#172033]"
                   aria-label="选择省份"
                 >
-                  {provinceOptions.map((province) => (
-                    <option key={province} value={province}>
-                      {province}
+                  {provinceOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
                     </option>
                   ))}
                 </select>
@@ -270,9 +289,9 @@ export default function Home() {
                   className="h-12 w-full appearance-none rounded-md border border-[#d8e3ea] bg-white px-4 pr-11 text-base text-[#172033]"
                   aria-label="选择选科"
                 >
-                  {subjectOptions.map((subject) => (
-                    <option key={subject} value={subject}>
-                      {subject}
+                  {subjectOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
                     </option>
                   ))}
                 </select>
@@ -291,7 +310,7 @@ export default function Home() {
           </button>
 
           <p className="mt-3 text-center text-xs leading-5 text-slate-500">
-            位次作为后续同分辅助项保留；当前公开普通专业组数据以分数、专业组、计划变化为主。
+            分数以2025普通批最低/最高为核心；位次参考图片中的2024最低分位次，2025图片未提供最低位次。
           </p>
         </form>
 
@@ -322,7 +341,7 @@ export default function Home() {
               <p>
                 数据状态：
                 <span className="font-semibold text-[#123d5c]">
-                  {result.databaseMode === "postgres" ? "Postgres 数据库" : "已校正普通非定向数据种子"}
+                  {result.databaseMode === "postgres" ? "Postgres 数据库" : "图片校正数据种子"}
                 </span>
               </p>
               {result.warning && <p className="mt-1">提示：{result.warning}</p>}
@@ -332,7 +351,7 @@ export default function Home() {
 
           {!result && !error && (
             <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-              填写分数、位次和选科后，将按普通专业组生成录取概率。
+              填写分数、位次和选科后，将按普通非定向专业组生成录取概率。
             </div>
           )}
 
@@ -358,27 +377,49 @@ export default function Home() {
                     </span>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-600">
-                    <div className="rounded bg-white px-2 py-2">
-                      2023低/高
-                      <strong className="mt-1 block text-[#172033]">{scoreText(item.score2023)}</strong>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                    <div className="rounded bg-white px-3 py-3">
+                      2025普通最低/最高
+                      <strong className="mt-1 block text-base text-[#172033]">{scoreRangeText(item.score2025)}</strong>
                     </div>
-                    <div className="rounded bg-white px-2 py-2">
-                      2024低/高
-                      <strong className="mt-1 block text-[#172033]">{scoreText(item.score2024)}</strong>
-                    </div>
-                    <div className="rounded bg-white px-2 py-2">
-                      2025低/高
-                      <strong className="mt-1 block text-[#172033]">{scoreText(item.score2025)}</strong>
+                    <div className="rounded bg-white px-3 py-3">
+                      与2025最低分差
+                      <strong className="mt-1 block text-base text-[#172033]">
+                        {item.scoreGap >= 0 ? `+${item.scoreGap}` : item.scoreGap}
+                      </strong>
                     </div>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                    <div className="rounded bg-white px-2 py-2">
+                      2024低/高
+                      <strong className="mt-1 block text-[#172033]">{scoreRangeText(item.score2024)}</strong>
+                    </div>
+                    <div className="rounded bg-white px-2 py-2">
+                      2024最低位次
+                      <strong className="mt-1 block text-[#172033]">{rankText(item.score2024)}</strong>
+                    </div>
+                    <div className="rounded bg-white px-2 py-2">
+                      2023最低位次
+                      <strong className="mt-1 block text-[#172033]">{rankText(item.score2023)}</strong>
+                    </div>
+                    <div className="rounded bg-white px-2 py-2">
+                      2022最低位次
+                      <strong className="mt-1 block text-[#172033]">{rankText(item.score2022)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
                     <div className="rounded bg-white px-2 py-2">
                       2025计划
                       <strong className="ml-1 text-[#172033]">{item.plan2025}人</strong>
                     </div>
                     <div className="rounded bg-white px-2 py-2">{planText(item)}</div>
+                  </div>
+
+                  <div className="mt-3 rounded bg-white px-2 py-2 text-xs text-slate-600">
+                    位次对比
+                    <strong className="ml-1 text-[#172033]">{rankCompareText(item)}</strong>
                   </div>
 
                   <div className="mt-3">

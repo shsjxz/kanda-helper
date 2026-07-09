@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     predictions,
     message:
       predictions.length > 0
-        ? "已根据官方招生计划和去年录取数据生成预测结果。"
+        ? "已根据2025普通批分数、2024位次和2026招生计划生成预测结果。"
         : "当前省份或选科暂无已核验的专业数据，请先录入数据库后再查询。",
   });
 }

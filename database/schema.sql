@@ -11,17 +11,27 @@
   duration text not null,
   plan_2025 integer not null,
   plan_2026 integer not null,
+  score_2022_lowest_rank integer,
   score_2023_highest integer,
   score_2023_lowest integer,
+  score_2023_lowest_rank integer,
   score_2024_highest integer,
   score_2024_lowest integer,
+  score_2024_lowest_rank integer,
   score_2025_highest integer not null,
   score_2025_lowest integer not null,
+  score_2025_lowest_rank integer,
   source_title text not null,
   source_url text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table kanda_admission_records
+  add column if not exists score_2022_lowest_rank integer,
+  add column if not exists score_2023_lowest_rank integer,
+  add column if not exists score_2024_lowest_rank integer,
+  add column if not exists score_2025_lowest_rank integer;
 
 create index if not exists idx_kanda_admission_records_lookup
   on kanda_admission_records (province, year, first_subject, program_group);
