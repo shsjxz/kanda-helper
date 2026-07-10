@@ -38,3 +38,33 @@ create index if not exists idx_kanda_admission_records_lookup
 
 create index if not exists idx_kanda_admission_records_required_subjects
   on kanda_admission_records using gin (required_subjects);
+
+create table if not exists kanda_admission_yearly_records (
+  id text primary key,
+  admission_record_id text not null,
+  college_name text not null default '南京医科大学康达学院',
+  province text not null,
+  track text not null,
+  subject_label text not null,
+  first_subject text,
+  required_subjects text[] not null default '{}',
+  program_group text,
+  major text not null,
+  data_level text not null default 'major',
+  batch text,
+  year integer not null,
+  highest_score integer,
+  lowest_score integer,
+  lowest_rank integer,
+  enrollment_plan integer,
+  source_title text,
+  source_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_kanda_yearly_records_lookup
+  on kanda_admission_yearly_records (province, year, track, major);
+
+create index if not exists idx_kanda_yearly_records_record_id
+  on kanda_admission_yearly_records (admission_record_id, year);

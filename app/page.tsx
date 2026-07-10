@@ -17,11 +17,6 @@ type ScoreSnapshot = {
   lowestRank?: number;
 };
 
-type CurrentScoreSnapshot = ScoreSnapshot & {
-  highest: number;
-  lowest: number;
-};
-
 type PredictionResult = {
   id: string;
   major: string;
@@ -29,18 +24,23 @@ type PredictionResult = {
   track: string;
   duration: string;
   subjectRequirement: string;
+  dataLevel?: "major" | "province-track";
   plan2025: number;
   plan2026: number;
   planDelta: number;
   score2022: ScoreSnapshot | null;
   score2023: ScoreSnapshot | null;
   score2024: ScoreSnapshot | null;
-  score2025: CurrentScoreSnapshot;
-  scoreGap: number;
-  rankGap2024: number | null;
+  score2025: ScoreSnapshot | null;
+  referenceYear: 2023 | 2024 | 2025 | null;
+  referenceScore: number | null;
+  referenceRank: number | null;
+  scoreGap: number | null;
+  rankGap: number | null;
   probability: number;
   level: PredictionLevel;
   reason: string;
+  dataNotice: string | null;
   sourceTitle: string;
   sourceUrl: string;
 };
@@ -59,8 +59,34 @@ type PredictResponse = {
   error?: string;
 };
 
-const provinceOptions = ["江苏", "浙江", "安徽", "山东", "河南", "四川"];
-const subjectOptions = ["物理+化学", "物理+生物", "物理+化学+生物", "物理+不限", "历史+生物", "历史+不限"];
+const provinceOptions = [
+  "江苏",
+  "山东",
+  "浙江",
+  "安徽",
+  "河南",
+  "四川",
+  "上海",
+  "新疆",
+  "山西",
+  "辽宁",
+  "福建",
+  "江西",
+  "湖北",
+  "广东",
+  "贵州",
+];
+const subjectOptions = [
+  "物理+化学",
+  "物理+生物",
+  "物理+化学+生物",
+  "物理+不限",
+  "历史+生物",
+  "历史+不限",
+  "不限",
+  "理科",
+  "文科",
+];
 
 function levelStyles(level: PredictionLevel) {
   if (level === "冲刺") return "border-amber-200 bg-amber-50 text-amber-700";
@@ -126,9 +152,21 @@ function rankText(score: ScoreSnapshot | null) {
 }
 
 function rankCompareText(item: PredictionResult) {
-  if (item.rankGap2024 === null) return "2024位次暂缺";
-  if (item.rankGap2024 >= 0) return `较2024靠前 ${item.rankGap2024.toLocaleString("zh-CN")} 名`;
-  return `较2024靠后 ${Math.abs(item.rankGap2024).toLocaleString("zh-CN")} 名`;
+  if (item.rankGap === null) return "参考位次暂缺";
+  if (item.rankGap >= 0) return `较${item.referenceYear ?? "历史"}靠前 ${item.rankGap.toLocaleString("zh-CN")} 名`;
+  return `较${item.referenceYear ?? "历史"}靠后 ${Math.abs(item.rankGap).toLocaleString("zh-CN")} 名`;
+}
+
+function scoreGapText(item: PredictionResult) {
+  if (item.scoreGap === null) return "--";
+  return item.scoreGap >= 0 ? `+${item.scoreGap}` : String(item.scoreGap);
+}
+
+function referenceText(item: PredictionResult) {
+  if (!item.referenceYear) return "暂无";
+  if (typeof item.referenceRank === "number") return `${item.referenceYear}位次 ${item.referenceRank.toLocaleString("zh-CN")}`;
+  if (typeof item.referenceScore === "number") return `${item.referenceYear}分数 ${item.referenceScore}`;
+  return `${item.referenceYear}`;
 }
 
 export default function Home() {
@@ -206,7 +244,7 @@ export default function Home() {
 
           <div className="mt-auto pt-12">
             <div className="mb-4 inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs text-white/82">
-              按2025去年普通分、2024位次和2026计划变化测算
+              按2025、2024、2023最低位次和2026计划变化测算
             </div>
             <h1 className="max-w-2xl text-[2rem] font-semibold leading-tight tracking-normal">
               南京医科大学康达学院志愿智能助手
@@ -310,7 +348,7 @@ export default function Home() {
           </button>
 
           <p className="mt-3 text-center text-xs leading-5 text-slate-500">
-            分数以2025普通批最低/最高为核心；位次参考图片中的2024最低分位次，2025图片未提供最低位次。
+            预测优先参考2025最低位次；暂无2025数据的省份会自动回退到2024、2023历史数据。
           </p>
         </form>
 
@@ -379,16 +417,20 @@ export default function Home() {
 
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                     <div className="rounded bg-white px-3 py-3">
-                      2025普通最低/最高
+                      2025最低/最高
                       <strong className="mt-1 block text-base text-[#172033]">{scoreRangeText(item.score2025)}</strong>
                     </div>
                     <div className="rounded bg-white px-3 py-3">
-                      与2025最低分差
-                      <strong className="mt-1 block text-base text-[#172033]">
-                        {item.scoreGap >= 0 ? `+${item.scoreGap}` : item.scoreGap}
-                      </strong>
+                      参考年份
+                      <strong className="mt-1 block text-base text-[#172033]">{referenceText(item)}</strong>
                     </div>
                   </div>
+
+                  {item.dataNotice && (
+                    <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-2 text-xs leading-5 text-amber-700">
+                      {item.dataNotice}
+                    </div>
+                  )}
 
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
                     <div className="rounded bg-white px-2 py-2">
@@ -420,6 +462,11 @@ export default function Home() {
                   <div className="mt-3 rounded bg-white px-2 py-2 text-xs text-slate-600">
                     位次对比
                     <strong className="ml-1 text-[#172033]">{rankCompareText(item)}</strong>
+                  </div>
+
+                  <div className="mt-2 rounded bg-white px-2 py-2 text-xs text-slate-600">
+                    与参考最低分差
+                    <strong className="ml-1 text-[#172033]">{scoreGapText(item)}</strong>
                   </div>
 
                   <div className="mt-3">

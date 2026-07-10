@@ -14,7 +14,7 @@ type DbAdmissionRow = {
   province: string;
   programGroup: string;
   track: AdmissionRecord["track"];
-  firstSubject: AdmissionRecord["firstSubject"];
+  firstSubject: AdmissionRecord["firstSubject"] | null;
   requiredSubjects: string[] | string | null;
   major: string;
   duration: string;
@@ -27,11 +27,32 @@ type DbAdmissionRow = {
   score2024Highest: number | string | null;
   score2024Lowest: number | string | null;
   score2024LowestRank: number | string | null;
-  score2025Highest: number | string;
-  score2025Lowest: number | string;
+  score2025Highest: number | string | null;
+  score2025Lowest: number | string | null;
   score2025LowestRank: number | string | null;
   sourceTitle: string;
   sourceUrl: string;
+};
+
+type DbYearlyAdmissionRow = {
+  id: string;
+  admissionRecordId: string;
+  collegeName: string | null;
+  province: string;
+  programGroup: string | null;
+  track: AdmissionRecord["track"];
+  firstSubject: AdmissionRecord["firstSubject"] | null;
+  requiredSubjects: string[] | string | null;
+  major: string;
+  dataLevel: AdmissionRecord["dataLevel"] | null;
+  batch: string | null;
+  year: number | string;
+  highestScore: number | string | null;
+  lowestScore: number | string | null;
+  lowestRank: number | string | null;
+  enrollmentPlan: number | string | null;
+  sourceTitle: string | null;
+  sourceUrl: string | null;
 };
 
 const globalForPg = globalThis as unknown as { kandaPool?: Pool };
@@ -90,6 +111,8 @@ function parseRequiredSubjects(value: string[] | string | null): AdmissionRecord
 }
 
 function mapRow(row: DbAdmissionRow): AdmissionRecord {
+  const score2025 = makeScore(row.score2025Highest, row.score2025Lowest, row.score2025LowestRank);
+
   return {
     id: row.id,
     collegeName: row.collegeName,
@@ -106,14 +129,57 @@ function mapRow(row: DbAdmissionRow): AdmissionRecord {
     score2022: makeScore(null, null, row.score2022LowestRank),
     score2023: makeScore(row.score2023Highest, row.score2023Lowest, row.score2023LowestRank),
     score2024: makeScore(row.score2024Highest, row.score2024Lowest, row.score2024LowestRank),
-    score2025: {
-      highest: Number(toNumber(row.score2025Highest) ?? 0),
-      lowest: Number(toNumber(row.score2025Lowest) ?? 0),
-      ...(toNumber(row.score2025LowestRank) !== null ? { lowestRank: Number(toNumber(row.score2025LowestRank)) } : {}),
-    },
+    score2025:
+      typeof score2025?.highest === "number" && typeof score2025.lowest === "number"
+        ? { highest: score2025.highest, lowest: score2025.lowest, ...(score2025.lowestRank ? { lowestRank: score2025.lowestRank } : {}) }
+        : null,
     sourceTitle: row.sourceTitle,
     sourceUrl: row.sourceUrl,
   };
+}
+
+function mapYearlyRows(rows: DbYearlyAdmissionRow[]): AdmissionRecord[] {
+  const grouped = new Map<string, DbYearlyAdmissionRow[]>();
+
+  for (const row of rows) {
+    const key = row.admissionRecordId || row.id;
+    grouped.set(key, [...(grouped.get(key) ?? []), row]);
+  }
+
+  return Array.from(grouped.entries()).map(([id, group]) => {
+    const latest = [...group].sort((a, b) => Number(b.year) - Number(a.year))[0];
+    const scoreByYear = new Map<number, ScoreSnapshot>();
+
+    for (const row of group) {
+      const score = makeScore(row.highestScore, row.lowestScore, row.lowestRank);
+      if (score) scoreByYear.set(Number(row.year), score);
+    }
+
+    const plan2025 = group.find((row) => Number(row.year) === 2025)?.enrollmentPlan;
+
+    return {
+      id,
+      collegeName: latest.collegeName || "南京医科大学康达学院",
+      year: 2026,
+      province: latest.province,
+      programGroup: latest.programGroup || latest.batch || "普通批",
+      track: latest.track,
+      firstSubject: latest.firstSubject,
+      requiredSubjects: parseRequiredSubjects(latest.requiredSubjects),
+      major: latest.major,
+      duration: "",
+      plan2025: Number(toNumber(plan2025) ?? 0),
+      plan2026: 0,
+      score2022: null,
+      score2023: scoreByYear.get(2023) ?? null,
+      score2024: scoreByYear.get(2024) ?? null,
+      score2025: scoreByYear.get(2025) ?? null,
+      batch: latest.batch ?? undefined,
+      dataLevel: latest.dataLevel ?? "province-track",
+      sourceTitle: latest.sourceTitle || "年度录取数据表",
+      sourceUrl: latest.sourceUrl || "",
+    };
+  });
 }
 
 function seedRecords(province: string) {
@@ -121,7 +187,37 @@ function seedRecords(province: string) {
 }
 
 function hasCalibratedRankData(records: AdmissionRecord[]) {
-  return records.some((record) => typeof record.score2024?.lowestRank === "number");
+  return records.some((record) => typeof record.score2025?.lowestRank === "number");
+}
+
+async function getYearlyRecords(pool: Pool, province: string) {
+  const { rows } = await pool.query<DbYearlyAdmissionRow>(
+    `select
+      id::text as "id",
+      admission_record_id as "admissionRecordId",
+      college_name as "collegeName",
+      province,
+      program_group as "programGroup",
+      track,
+      first_subject as "firstSubject",
+      required_subjects as "requiredSubjects",
+      major,
+      data_level as "dataLevel",
+      batch,
+      year,
+      highest_score as "highestScore",
+      lowest_score as "lowestScore",
+      lowest_rank as "lowestRank",
+      enrollment_plan as "enrollmentPlan",
+      source_title as "sourceTitle",
+      source_url as "sourceUrl"
+    from kanda_admission_yearly_records
+    where province = $1 and year in (2023, 2024, 2025)
+    order by admission_record_id, year`,
+    [province],
+  );
+
+  return mapYearlyRows(rows);
 }
 
 export async function getAdmissionRecords(province: string): Promise<DatabaseResult> {
@@ -169,6 +265,15 @@ export async function getAdmissionRecords(province: string): Promise<DatabaseRes
     );
 
     if (rows.length === 0) {
+      const yearlyRecords = await getYearlyRecords(pool, province);
+      if (yearlyRecords.length > 0) {
+        return {
+          records: yearlyRecords,
+          mode: "postgres",
+          warning: "当前省份来自年度录取数据表；如只有省份/科类最低线，则结果为省份层级参考，不是专业明细。",
+        };
+      }
+
       return {
         records: seedRecords(province),
         mode: "seed",
@@ -178,6 +283,15 @@ export async function getAdmissionRecords(province: string): Promise<DatabaseRes
 
     const records = rows.map(mapRow);
     if (!hasCalibratedRankData(records)) {
+      const yearlyRecords = await getYearlyRecords(pool, province);
+      if (yearlyRecords.length > 0 && hasCalibratedRankData(yearlyRecords)) {
+        return {
+          records: yearlyRecords,
+          mode: "postgres",
+          warning: "旧专业表缺少2025最低位次，已使用年度录取数据表。",
+        };
+      }
+
       return {
         records: seedRecords(province),
         mode: "seed",
