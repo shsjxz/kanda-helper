@@ -169,7 +169,7 @@ function mapYearlyRows(rows: DbYearlyAdmissionRow[]): AdmissionRecord[] {
       major: latest.major,
       duration: "",
       plan2025: Number(toNumber(plan2025) ?? 0),
-      plan2026: 0,
+      plan2026: Number(toNumber(plan2025) ?? 0),
       score2022: null,
       score2023: scoreByYear.get(2023) ?? null,
       score2024: scoreByYear.get(2024) ?? null,
@@ -232,6 +232,15 @@ export async function getAdmissionRecords(province: string): Promise<DatabaseRes
   }
 
   try {
+    const yearlyRecords = await getYearlyRecords(pool, province);
+    if (yearlyRecords.some((record) => record.dataLevel === "major")) {
+      return {
+        records: yearlyRecords,
+        mode: "postgres",
+        warning: "当前省份优先使用年度专业明细表；如少数专业缺少位次，则按最低分参与预测。",
+      };
+    }
+
     const { rows } = await pool.query<DbAdmissionRow>(
       `select
         r.id::text as "id",
@@ -265,7 +274,6 @@ export async function getAdmissionRecords(province: string): Promise<DatabaseRes
     );
 
     if (rows.length === 0) {
-      const yearlyRecords = await getYearlyRecords(pool, province);
       if (yearlyRecords.length > 0) {
         return {
           records: yearlyRecords,

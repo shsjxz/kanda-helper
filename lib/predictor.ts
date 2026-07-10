@@ -87,6 +87,9 @@ export function recordMatchesInput(record: AdmissionRecord, input: PredictionInp
   if (record.track === "理科") return parsed.selected.has("理科") || parsed.firstSubject === "物理";
   if (record.track === "文科") return parsed.selected.has("文科") || parsed.firstSubject === "历史";
 
+  if (record.track === "物理等科目类" && parsed.selected.has("理科")) return record.requiredSubjects.length === 0;
+  if (record.track === "历史等科目类" && parsed.selected.has("文科")) return record.requiredSubjects.length === 0;
+
   if (!parsed.firstSubject) return false;
   if (record.firstSubject !== parsed.firstSubject) return false;
 
@@ -201,8 +204,12 @@ function makeReason(record: AdmissionRecord, result: Omit<PredictionResult, "rea
 }
 
 export function buildPredictions(records: AdmissionRecord[], input: PredictionInput) {
-  return records
-    .filter((record) => recordMatchesInput(record, input))
+  const matchedRecords = records.filter((record) => recordMatchesInput(record, input));
+  const displayRecords = matchedRecords.some((record) => record.dataLevel !== "province-track")
+    ? matchedRecords.filter((record) => record.dataLevel !== "province-track")
+    : matchedRecords;
+
+  return displayRecords
     .map((record) => {
       const reference = latestReference(record);
       const referenceScore = reference?.score?.lowest ?? null;
