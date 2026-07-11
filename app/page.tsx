@@ -233,10 +233,10 @@ export default function Home() {
           <header className="flex items-center justify-between border-b border-white/15 pb-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-white/10 text-sm font-bold">
-                康
+                🦉
               </div>
               <div>
-                <p className="text-xs text-white/70">南京医科大学康达学院</p>
+                <p className="text-xs text-white/70">🦉 康达猫头鹰学长</p>
                 <p className="text-sm font-semibold">普通专业组冲稳保查询</p>
               </div>
             </div>
@@ -250,10 +250,10 @@ export default function Home() {
               按2025、2024、2023最低位次和2026计划变化测算
             </div>
             <h1 className="max-w-2xl text-[2rem] font-semibold leading-tight tracking-normal">
-              南京医科大学康达学院志愿智能助手
+              康达猫头鹰学长 AI 招生预测
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/78">
-              当前版本只使用普通非定向专业组。护理学按图片要求放在生物专业组；物理+化学不含生物时，不会显示护理学。
+              基于历年录取数据、位次和招生计划，为康达学院考生提供AI录取概率预测、专业分析、新生攻略，预测结果仅供参考。
             </p>
           </div>
         </div>
@@ -369,6 +369,10 @@ export default function Home() {
                 {averageProbability === null ? "--" : `${averageProbability}%`}
               </p>
             </div>
+          </div>
+
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
+            ⚠️ 温馨提示：本网站为个人经验分享与AI预测分析平台，所有预测结果和数据分析仅供参考，不构成任何录取承诺或报考建议。最终请以各省教育考试院及南京医科大学康达学院官方公布的信息为准。
           </div>
 
           {error && (
@@ -491,6 +495,11 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        <footer className="mt-6 border-t border-slate-200 pt-5 text-center text-xs leading-6 text-slate-500">
+          <p>© 2026 康达猫头鹰学长</p>
+          <p>本网站为个人经验分享与AI分析平台，不代表南京医科大学康达学院官方。</p>
+        </footer>
       </section>
     </main>
   );

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "南京医科大学康达学院志愿智能助手",
-  description: "基于历年录取分数线、位次和招生计划的康达学院志愿测算系统",
+  title: "康达猫头鹰学长｜康达学院AI招生预测（仅供参考）",
+  description: "基于历年录取数据、位次和招生计划的康达学院AI招生预测与专业分析平台，预测结果仅供参考。",
 };
 
 export default function RootLayout({
